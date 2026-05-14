@@ -121,45 +121,48 @@ const spinWheel = () => {
       <section ref="wheelStage" class="wheel-stage" aria-live="polite">
         <div class="wheel-pointer" aria-hidden="true"></div>
 
-        <div class="wheel-shell">
-          <svg
-            class="wheel-svg"
-            :class="{ spinning: isSpinning }"
-            :viewBox="`0 0 ${wheelSize} ${wheelSize}`"
-            :style="{ transform: `rotate(${rotation}deg)` }"
-            role="img"
-            aria-label="Decision wheel"
-          >
-            <g>
-              <path
-                v-for="(choice, index) in choices"
-                :key="`${choice}-${index}`"
-                class="wheel-slice"
-                :class="{ selected: selectedIndex === index }"
-                :d="slicePath(index)"
-                :fill="colors[index % colors.length]"
-                stroke="#ffffff"
-                stroke-width="4"
-              />
-            </g>
-            <g>
-              <text
-                v-for="(choice, index) in choices"
-                :key="`${choice}-${index}-label`"
-                class="wheel-text"
-                :x="labelPosition(index).x"
-                :y="labelPosition(index).y"
-                :transform="`rotate(${labelPosition(index).rotation} ${labelPosition(index).x} ${labelPosition(index).y})`"
-                text-anchor="middle"
-                dominant-baseline="middle"
-              >
-                {{ choice }}
-              </text>
-            </g>
-          </svg>
-        </div>
+        <div class="wheel-assembly">
+          <div class="wheel-shell">
+            <svg
+              class="wheel-svg"
+              :class="{ spinning: isSpinning }"
+              :viewBox="`0 0 ${wheelSize} ${wheelSize}`"
+              :style="{ transform: `rotate(${rotation}deg)` }"
+              preserveAspectRatio="xMidYMid meet"
+              role="img"
+              aria-label="Decision wheel"
+            >
+              <g>
+                <path
+                  v-for="(choice, index) in choices"
+                  :key="`${choice}-${index}`"
+                  class="wheel-slice"
+                  :class="{ selected: selectedIndex === index }"
+                  :d="slicePath(index)"
+                  :fill="colors[index % colors.length]"
+                  stroke="#ffffff"
+                  stroke-width="4"
+                />
+              </g>
+              <g>
+                <text
+                  v-for="(choice, index) in choices"
+                  :key="`${choice}-${index}-label`"
+                  class="wheel-text"
+                  :x="labelPosition(index).x"
+                  :y="labelPosition(index).y"
+                  :transform="`rotate(${labelPosition(index).rotation} ${labelPosition(index).x} ${labelPosition(index).y})`"
+                  text-anchor="middle"
+                  dominant-baseline="middle"
+                >
+                  {{ choice }}
+                </text>
+              </g>
+            </svg>
+          </div>
 
-        <div class="wheel-center" aria-hidden="true"></div>
+          <div class="wheel-center" aria-hidden="true"></div>
+        </div>
 
         <div class="wheel-result" :class="{ visible: selectedChoice }">
           <span class="result-swatch" :style="{ background: selectedColor }"></span>
