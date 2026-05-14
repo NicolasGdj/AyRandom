@@ -53,7 +53,12 @@ onBeforeUnmount(() => {
       </nav>
     </section>
 
-    <section v-else class="module-page" :aria-labelledby="`${activeModule.id}-title`">
+    <section
+      v-else
+      class="module-page"
+      :class="`${activeModule.id}-page`"
+      :aria-labelledby="`${activeModule.id}-title`"
+    >
       <button class="back-button" type="button" @click="openMenu">Back to menu</button>
       <component :is="activeModule.component" />
     </section>
