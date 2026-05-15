@@ -1,9 +1,12 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
+const emit = defineEmits(['back-to-menu']);
+
 const activePointers = ref([]);
 const winnerId = ref(null);
 const countdownStarted = ref(false);
+const countdownValue = ref(3);
 const selectionLocked = ref(false);
 const canRestartAfterRelease = ref(false);
 const isFullscreen = ref(false);
@@ -11,6 +14,7 @@ const isDesktop = ref(false);
 const touchSurface = ref(null);
 const gradientCanvas = ref(null);
 let selectionTimer = null;
+let countdownTimer = null;
 let gradientFrame = null;
 let gradientDrawPending = false;
 let gradientTimeout = null;
@@ -265,7 +269,12 @@ const clearSelectionTimer = () => {
     window.clearTimeout(selectionTimer);
     selectionTimer = null;
   }
+  if (countdownTimer) {
+    window.clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
   countdownStarted.value = false;
+  countdownValue.value = 3;
 };
 
 const scheduleSelection = () => {
@@ -276,11 +285,21 @@ const scheduleSelection = () => {
   }
 
   countdownStarted.value = true;
+  countdownValue.value = Math.ceil(selectionDelay / 1000);
+  const countdownStartedAt = performance.now();
+  countdownTimer = window.setInterval(() => {
+    const remaining = selectionDelay - (performance.now() - countdownStartedAt);
+    countdownValue.value = Math.max(1, Math.ceil(remaining / 1000));
+  }, 100);
   selectionTimer = window.setTimeout(() => {
     if (activePointers.value.length > 1) {
       const winner = activePointers.value[Math.floor(Math.random() * activePointers.value.length)];
       winnerId.value = winner.id;
       selectionLocked.value = true;
+    }
+    if (countdownTimer) {
+      window.clearInterval(countdownTimer);
+      countdownTimer = null;
     }
     countdownStarted.value = false;
   }, selectionDelay);
@@ -458,11 +477,24 @@ watch(winner, scheduleGradientDraw);
           Exit fullscreen
         </button>
 
+        <button
+          class="surface-back-button"
+          type="button"
+          aria-label="Back to menu"
+          @pointerdown.stop
+          @pointermove.stop
+          @click.stop="emit('back-to-menu')"
+        />
+
         <canvas v-if="pointerCount > 1 && !winner" ref="gradientCanvas" class="gradient-canvas" aria-hidden="true"></canvas>
 
         <div class="surface-copy">
           <span>{{ statusText }}</span>
           <strong>{{ pointerCount }} active {{ pointerCount === 1 ? 'touch' : 'touches' }}</strong>
+        </div>
+
+        <div v-if="countdownStarted && !winner" class="countdown-display" aria-live="polite">
+          <span :key="countdownValue">{{ countdownValue }}</span>
         </div>
 
         <div

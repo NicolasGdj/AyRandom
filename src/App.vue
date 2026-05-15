@@ -60,7 +60,7 @@ onBeforeUnmount(() => {
       :aria-labelledby="`${activeModule.id}-title`"
     >
       <button class="back-button" type="button" @click="openMenu">Back to menu</button>
-      <component :is="activeModule.component" />
+      <component :is="activeModule.component" @back-to-menu="openMenu" />
     </section>
   </main>
 </template>
