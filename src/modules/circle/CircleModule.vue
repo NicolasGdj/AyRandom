@@ -5,16 +5,19 @@ const emit = defineEmits(['back-to-menu']);
 
 const activePointers = ref([]);
 const winnerId = ref(null);
+const selectedWinner = ref(null);
 const countdownStarted = ref(false);
 const countdownValue = ref(3);
 const selectionLocked = ref(false);
-const canRestartAfterRelease = ref(false);
 const isFullscreen = ref(false);
 const isDesktop = ref(false);
 const touchSurface = ref(null);
 const gradientCanvas = ref(null);
 let selectionTimer = null;
 let countdownTimer = null;
+let resultChangeTimer = null;
+let resultLockedAt = 0;
+let resultPointerCount = 0;
 let gradientFrame = null;
 let gradientDrawPending = false;
 let gradientTimeout = null;
@@ -37,17 +40,17 @@ const coloredPointers = computed(() =>
     color: colorForPlayer(index, activePointers.value.length)
   }))
 );
-const winner = computed(() => coloredPointers.value.find((pointer) => pointer.id === winnerId.value));
+const winner = computed(() => selectedWinner.value);
 const visiblePointers = computed(() => {
-  if (winnerId.value === null) {
+  if (!winner.value) {
     return coloredPointers.value;
   }
 
-  return coloredPointers.value.filter((pointer) => pointer.id === winnerId.value);
+  return [winner.value];
 });
 const statusText = computed(() => {
-  if (winnerId.value !== null) {
-    return canRestartAfterRelease.value ? 'Touch again to restart' : 'Winner selected';
+  if (winner.value) {
+    return pointerCount.value === resultPointerCount ? 'Winner selected' : 'Result held for 3 seconds';
   }
 
   if (pointerCount.value >= maxPlayers) {
@@ -277,6 +280,51 @@ const clearSelectionTimer = () => {
   countdownValue.value = 3;
 };
 
+const clearResultChangeTimer = () => {
+  if (resultChangeTimer) {
+    window.clearTimeout(resultChangeTimer);
+    resultChangeTimer = null;
+  }
+};
+
+const clearResult = () => {
+  winnerId.value = null;
+  selectedWinner.value = null;
+  selectionLocked.value = false;
+  resultLockedAt = 0;
+  resultPointerCount = 0;
+  clearResultChangeTimer();
+};
+
+const releaseResultForCurrentState = () => {
+  clearResult();
+  if (activePointers.value.length > 1) {
+    scheduleSelection();
+  } else {
+    clearSelectionTimer();
+  }
+};
+
+const syncLockedResultWithPointerCount = () => {
+  if (!selectionLocked.value) {
+    return;
+  }
+
+  clearResultChangeTimer();
+  if (activePointers.value.length === resultPointerCount) {
+    return;
+  }
+
+  const elapsed = performance.now() - resultLockedAt;
+  const remaining = Math.max(0, selectionDelay - elapsed);
+  resultChangeTimer = window.setTimeout(() => {
+    resultChangeTimer = null;
+    if (selectionLocked.value && activePointers.value.length !== resultPointerCount) {
+      releaseResultForCurrentState();
+    }
+  }, remaining);
+};
+
 const scheduleSelection = () => {
   clearSelectionTimer();
 
@@ -293,9 +341,13 @@ const scheduleSelection = () => {
   }, 100);
   selectionTimer = window.setTimeout(() => {
     if (activePointers.value.length > 1) {
-      const winner = activePointers.value[Math.floor(Math.random() * activePointers.value.length)];
+      const candidates = coloredPointers.value;
+      const winner = candidates[Math.floor(Math.random() * candidates.length)];
       winnerId.value = winner.id;
+      selectedWinner.value = { ...winner };
       selectionLocked.value = true;
+      resultLockedAt = performance.now();
+      resultPointerCount = activePointers.value.length;
     }
     if (countdownTimer) {
       window.clearInterval(countdownTimer);
@@ -306,19 +358,15 @@ const scheduleSelection = () => {
 };
 
 const unlockSelection = () => {
-  winnerId.value = null;
-  selectionLocked.value = false;
-  canRestartAfterRelease.value = false;
+  clearResult();
 };
 
 const handlePointerDown = (event) => {
   event.currentTarget.setPointerCapture(event.pointerId);
-  if (selectionLocked.value && !canRestartAfterRelease.value) {
-    return;
-  }
-
   if (selectionLocked.value) {
-    unlockSelection();
+    updatePointer(event);
+    syncLockedResultWithPointerCount();
+    return;
   }
 
   updatePointer(event);
@@ -336,7 +384,8 @@ const handlePointerMove = (event) => {
 const removePointer = (event) => {
   activePointers.value = activePointers.value.filter((pointer) => pointer.id !== event.pointerId);
   if (selectionLocked.value) {
-    canRestartAfterRelease.value = true;
+    syncLockedResultWithPointerCount();
+    return;
   }
 
   if (activePointers.value.length <= 1) {
@@ -351,14 +400,9 @@ const addTestTouch = () => {
   if (
     !bounds ||
     !isDesktop.value ||
-    activePointers.value.length >= maxPlayers ||
-    (selectionLocked.value && !canRestartAfterRelease.value)
+    activePointers.value.length >= maxPlayers
   ) {
     return;
-  }
-
-  if (selectionLocked.value) {
-    unlockSelection();
   }
 
   const margin = 110;
@@ -371,14 +415,19 @@ const addTestTouch = () => {
     simulated: true
   });
   simulatedId += 1;
+  if (selectionLocked.value) {
+    syncLockedResultWithPointerCount();
+    return;
+  }
+
   scheduleSelection();
 };
 
 const clearTestTouches = () => {
-  const hadSimulatedTouch = activePointers.value.some((pointer) => pointer.simulated);
   activePointers.value = activePointers.value.filter((pointer) => !pointer.simulated);
-  if (selectionLocked.value && hadSimulatedTouch) {
-    canRestartAfterRelease.value = true;
+  if (selectionLocked.value) {
+    syncLockedResultWithPointerCount();
+    return;
   }
 
   if (activePointers.value.length <= 1) {
@@ -422,6 +471,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearSelectionTimer();
+  clearResultChangeTimer();
   if (gradientFrame) {
     window.cancelAnimationFrame(gradientFrame);
   }
